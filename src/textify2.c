@@ -20,6 +20,12 @@
 
 #define CALCULATE_LUMINESCENCE(r,g,b) (int)(0.299 * r + 0.587 * g + 0.114 * b);
 
+/*TODO BEFORE MOVING ON TO NEW FEATURES
+	- add png / variable channel support
+	- add warnings to images of odd-size channel sizes (1,2,5,etc.)
+*/
+
+
 char* GetInputFile()
 {
 	WIN32_FIND_DATA findFileData;
@@ -93,7 +99,7 @@ int main()
 	GetConsoleScreenBufferInfo(hConsole, &csbi);
 	int windowWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
 	int windowHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-	printf("Terminal size: %d wide x %d height\n", windowWidth, windowHeight);
+	printf("Terminal size: %d wide x %d high\n", windowWidth, windowHeight);
 
 	// Get which file to use for the image
 	char* filename = GetInputFile();
@@ -104,22 +110,40 @@ int main()
 	printf("Chosen file path: '%s'\n", filePath);
 
 	// Load the image file
-	int width, height, channels;
-	unsigned char *image = stbi_load(filePath, &width, &height, &channels, OUTPUT_CHANNELS);
+	int originalWidth, originalHeight, channels;
+	unsigned char *image = stbi_load(filePath, &originalWidth, &originalHeight, &channels, OUTPUT_CHANNELS);
 	if (image == NULL){
-		perror("Error loading image");
+		perror("Error loading image.");
+		system("pause");
+		return -1;
+	} else {
+		printf("%s", "Successfully loaded image.\n");
 	}
+	// Calculate the new width based on the aspect ratio
+	int newWidth = (int)((float)originalWidth / originalHeight * windowHeight * 2); // *2 because 1 char is double high than wide
+	printf("Resized image size: %d wide x %d high\n", newWidth, windowHeight);
 
 	// Allocate the memory to hold the new resized image
-	unsigned char* resizedImage = (unsigned char*)malloc(windowWidth * windowHeight * channels);
-	// Resize the loaded file to fit the size of the window
+	unsigned char* resizedImage = (unsigned char*)malloc(newWidth * windowHeight * channels);
+	if (resizedImage == NULL) {
+		perror("Error allocating memory for resized image.");
+		stbi_image_free(image);
+		system("pause");
+		return -1;
+	} else {
+		printf("%s", "Successfully allocated memory to resize image.\n");
+	}
+
+	// Resize the loaded file to fit the size of the window while maintaining the aspect ratio
 	stbir_resize(
-		image, width, height, 0,
-		resizedImage, windowWidth, windowHeight, 0,
+		image, originalWidth, originalHeight, 0,
+		resizedImage, newWidth, windowHeight, 0,
 		STBIR_RGB, STBIR_TYPE_UINT8, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT
 	);
 	if (resizedImage == NULL){
 		perror("Error resizing image.");
+	} else {
+		printf("%s", "Successfully resized image.\n");
 	}
 
 	system("cls");
@@ -127,12 +151,12 @@ int main()
 	// Loop through the image, convert the color values to an ASCII character, and print it
 	for (int h = 0; h < windowHeight; h++)
 	{
-		for (int w = 0; w < windowWidth; w++)
+		for (int w = 0; w < newWidth; w++)
 		{
-			int index = channels * (h * windowWidth + w);
+			int index = channels * (h * newWidth + w);
 			int red = resizedImage[index + 0];
-			int green = resizedImage[index + 0];
-			int blue = resizedImage[index + 0];
+			int green = resizedImage[index + 1];
+			int blue = resizedImage[index + 2];
 			int luminescence = CALCULATE_LUMINESCENCE(red, green, blue);
 			// Basically normalizing the luminescence value (0-255) to the bounds of the CHARMAP (0-68)
 			char pixelChar = CHARMAP[(int)(luminescence / CHARMAP_WEIGHT)];
