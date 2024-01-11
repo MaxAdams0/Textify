@@ -12,9 +12,9 @@
 
 #define EXIT_WARNING			-1
 
-#define VALID_IMAGE_EXTENTIONS	{".png",".jpeg",".jpg"}
+#define VALID_IMAGE_EXTENTIONS	{".jpg"}
 #define VALID_VIDEO_EXTENTIONS	{".mp4"}
-#define MAX_FILEEXT_SIZE		4
+#define MAX_FILEEXT_SIZE		5
 #define MAX_FILEPATH_SIZE		4096
 #define MAX_FILENAME_SIZE		MAX_PATH
 #define OUTPUT_CHANNELS			3
@@ -153,7 +153,7 @@ int main()
 	filePath[sizeof(filePath) - 1] = '\0';
 	printf("Chosen file path: '%s'\n", filePath);
 
-	// Get file type (manual for now, auto later)
+	// Get the file extension (to detect if it is valid)
 	char* fileExtPtr;
 	fileExtPtr = strchr(fileName, '.');
 	int fileExtIndex = (int)(fileExtPtr - fileName);
@@ -162,30 +162,27 @@ int main()
 	for (int i = fileExtIndex; i < strlen(fileName) && j < MAX_FILEEXT_SIZE; i++, j++) {
 		fileExt[j] = fileName[i];
 	}
-	fileExt[j] = '\0';
+	fileExt[MAX_FILEEXT_SIZE-1] = '\0';
+
+	printf("File extension: '%s'\n", fileExt);
 
 	char fileType = IsValidFileExtension(fileExt);
 	if (fileType == -1) {
 		ExitAsWarning("The provided file extension is not supported, sorry!");
 	}
-
 	if (fileType == 'v') {
 		ExitAsWarning("Video file format implementation is not completed yet, sorry!");
 	}
 
 	// Load the image file
 	int originalWidth, originalHeight, channels;
-	unsigned char *image = stbi_load(filePath, &originalWidth, &originalHeight, &channels, OUTPUT_CHANNELS);
+	unsigned char *image = stbi_load(filePath, &originalWidth, &originalHeight, &channels, STBI_default);
 	if (image == NULL){
 		ExitAsError("Error loading image");
 	} else {
 		printf("%s", "Successfully loaded image.\n");
 	}
 
-	/*
-	Chosen file path: 'D:\dev\C\Textify\res\soyboysel.jpg'
-	Error loading image: Invalid argument
-	*/
 	// Calculate the new width based on the aspect ratio
 	int newWidth = (int)((float)originalWidth / originalHeight * windowHeight * 2); // *2 because 1 char is double high than wide
 	printf("Resized image size: %d wide x %d high\n", newWidth, windowHeight);
