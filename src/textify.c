@@ -7,24 +7,19 @@
 #include <windows.h>
 #include <string.h>
 
-#include <avformat.h>
-#include <avcodec.h>
-#include <avutil.h>
-
 #include "../lib/STB/stb_image.h"
 #include "../lib/STB/stb_image_resize2.h"
 
 #define EXIT_WARNING 1
 
 #define VALID_IMAGE_EXTENTIONS {".jpg"}
-#define VALID_VIDEO_EXTENTIONS {".mp4"}
 #define MAX_FILEEXT_SIZE 5
-#define MAX_FILEPATH_SIZE 4096
+#define MAX_PATH_SIZE 4096
 #define MAX_FILENAME_SIZE MAX_PATH
-// I had to add backslashes here, as % and \ are operators and therefore have uses which I don't want :/
-#define CHARMAP				"$@B\%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-// The light difference between every character. (255/68), not 69 because then there would be OOB errors
-#define CHARMAP_WEIGHT		3.75
+
+#define CHARMAP " °±²" // CP437, make sure set file encoding to it
+// The light difference between every character. Not 4 because then there would be OOB errors
+#define CHARMAP_WEIGHT (255/3)
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 #define CALCULATE_LUMINESCENCE(r,g,b) (int)(0.299 * r + 0.587 * g + 0.114 * b);
@@ -34,15 +29,16 @@
 	- add warnings to images of odd-size channel sizes (1,2,5,etc.)
 */
 
-char* GetInputFile();
-void ExitAsWarning(char* message);
-void ExitAsError(char* message);
+char IsValidFile(const char* fileName);
+int IsDir(const char* fileName);
 void PrintImage(char* filePath, int windowHeight);
-char IsValidFileExtension(const char* fileExtension);
+void ExitAsError(char* message);
+void ExitAsWarning(char* message);
+char* GetInputFile();
 
 int main()
 {
-	if (mkdir("res")!=0) {
+	if (mkdir("res") != 0) {
 		perror("Error creating directory");
 	}
 	// Maximize window
@@ -58,40 +54,23 @@ int main()
 	printf("Terminal size: %d wide x %d high\n", windowWidth, windowHeight);
 
 	// Get which file to use
-	char* fileName = GetInputFile();
-	char programPath[MAX_FILEPATH_SIZE];
+	char* inputName = GetInputMedia();
+	char programPath[MAX_PATH_SIZE];
 	_getcwd(programPath, sizeof(programPath));
-	char filePath[MAX_FILEPATH_SIZE];
-	snprintf(filePath, sizeof(filePath), "%s\\res\\%s", programPath, fileName);
-	filePath[sizeof(filePath) - 1] = '\0';
-	printf("Chosen file path: '%s'\n", filePath);
+	char inputPath[MAX_PATH_SIZE];
+	snprintf(inputPath, sizeof(inputPath), "%s\\res\\%s", programPath, inputName);
+	inputPath[sizeof(inputPath) - 1] = '\0';
+	printf("Chosen file path: '%s'\n", inputPath);
 
-	// Get the file extension (to detect if it is valid)
-	char* fileExtPtr;
-	fileExtPtr = strchr(fileName, '.');
-	int fileExtIndex = (int)(fileExtPtr - fileName);
-	char fileExt[MAX_FILEEXT_SIZE];
-	int j = 0;
-	for (int i = fileExtIndex; i < strlen(fileName) && j < MAX_FILEEXT_SIZE; i++, j++) {
-		fileExt[j] = fileName[i];
+	char inputType = IsValidFile(inputName);
+	if (inputType == -1) {
+		ExitAsWarning("The provided input type/extension is not supported, sorry!");
 	}
-	fileExt[MAX_FILEEXT_SIZE-1] = '\0';
-
-	printf("File extension: '%s'\n", fileExt);
-
-	char fileType = IsValidFileExtension(fileExt);
-	if (fileType == -1) {
-		ExitAsWarning("The provided file extension is not supported, sorry!");
+	else if (inputType == 'i') {
+		PrintImage(inputPath, windowHeight);
 	}
-	else if (fileType == 'v') {
-		AVFormatContext *pFormatCtx = NULL;
-		if(open_video_file("/path/to/your/video.mp4", &pFormatCtx) != 0) {
-			fprintf(stderr, "Couldn't open file\n");
-			return -1;
-		}
-	}
-	else if (fileType == 'i') {
-		PrintImage(filePath, windowHeight);
+	else if (inputType == 's') {
+		
 	}
 	else {
 		ExitAsWarning("IsValidFileExtension gave erroneous response. Issue Unknown.");
@@ -101,29 +80,44 @@ int main()
 	return 0;
 }
 
-char IsValidFileExtension(const char* fileExtension)
+char IsValidFile(const char* fileName)
 {
+	// Get the file extension (to detect if it is valid)
+	char* fileExtPtr;
+	fileExtPtr = strchr(fileName, '.');
+	int fileExtIndex = (int)(fileExtPtr - fileName);
+	char fileExt[MAX_FILEEXT_SIZE];
+	int j = 0;
+	for (int i = fileExtIndex; i < strlen(fileName) && j < MAX_FILEEXT_SIZE; i++, j++) {
+		fileExt[j] = fileName[i];
+	}
+	fileExt[MAX_FILEEXT_SIZE - 1] = '\0';
+
+	printf("File extension: '%s'\n", fileExt);
 	// #defines cannot be iterated through at runtime, so this is a work around
 	// It is still better to have this, as it means we can change the valid ext.s at the top of the code
 	const char* validImageExtensions[] = VALID_IMAGE_EXTENTIONS;
-	const char* validVideoExtensions[] = VALID_VIDEO_EXTENTIONS;
 	// Check if it is an image file
 	for (int ext = 0; ext < ARRAY_SIZE(validImageExtensions); ext++)
 	{
-		if (strcmp(fileExtension, validImageExtensions[ext]) == 0) {
+		if (strcmp(fileExt, validImageExtensions[ext]) == 0) {
 			return 'i';
 		}
 	}
-	// If it is not, check if it is a video file
-	for (int ext = 0; ext < ARRAY_SIZE(validVideoExtensions); ext++)
-	{
-		if (strcmp(fileExtension, validVideoExtensions[ext]) == 0) {
-			return 'v';
-		}
+	// If it is not, check if it is a directory
+	if (IsDir(fileExt) == 0) {
+		return 's'; // sequence
 	}
 
 	return -1; // If the file ext. is not valid
-}  
+}
+
+int IsDir(const char* fileName)
+{
+	struct stat path;
+	stat(fileName, &path);
+	return S_ISREG(path.st_mode);
+}
 
 void PrintImage(char* filePath, int windowHeight)
 {
@@ -173,7 +167,9 @@ void PrintImage(char* filePath, int windowHeight)
 			int green = resizedImage[index + 1];
 			int blue = resizedImage[index + 2];
 			int luminescence = CALCULATE_LUMINESCENCE(red, green, blue);
-			// Basically normalizing the luminescence value (0-255) to the bounds of the CHARMAP (0-68)
+			int charmap_size = ARRAY_SIZE(CHARMAP);
+			// Basically normalizing the luminescence value (0-255) to the bounds of the CHARMAP (0-10)
+			// charmapsize - is to reverse the charmap, otherwise black=white
 			char pixelChar = CHARMAP[(int)(luminescence / CHARMAP_WEIGHT)];
 			putchar(pixelChar);
 		}
@@ -184,21 +180,21 @@ void PrintImage(char* filePath, int windowHeight)
 	free(resizedImage);
 }
 
-void ExitAsError()
+void ExitAsError(char* message)
 {
 	perror(message);
 	system("pause");
 	exit(EXIT_FAILURE);
 }
 
-void ExitAsWarning()
+void ExitAsWarning(char* message)
 {
 	printf("%s\n", message);
 	system("pause");
 	exit(EXIT_WARNING);
 }
 
-char* GetInputFile()
+char* GetInputMedia()
 {
 	WIN32_FIND_DATA findFileData;
 	HANDLE hFind = FindFirstFile("res\\*", &findFileData);
