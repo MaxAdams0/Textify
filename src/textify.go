@@ -65,8 +65,6 @@ func IsValidAndType(fileName string) string {
 }
 
 func PrintImage(filePath string, windowHeight int) {
-	// CP437 chracter encoding, make sure set file encoding to it
-	//charmap := []rune{' ', '\u2591', '\u2592', '\u2593'}
 	charmap := " -:;~+?#8$@"
 	// Open the image
 	image.RegisterFormat("jpeg", "jpg", jpeg.Decode, jpeg.DecodeConfig)
