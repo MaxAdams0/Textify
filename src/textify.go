@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/jpeg"
+	"image/png"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/inancgumus/screen"
@@ -19,7 +22,15 @@ func main() {
 	FatalIfTrue(err)
 	inputPath := pwd + "\\res\\" + GetInputMedia()
 	// Varify that the file is readable (valid), and get its type (image/sequence)
-	inputType := IsValidAndType(GetFileExt(inputPath))
+	inputExt := GetFileExt(inputPath)
+	inputType := IsValidAndType(inputExt)
+	// Set the encoding for the images
+	if inputExt == "jpg" {
+		image.RegisterFormat("jpeg", "jpg", jpeg.Decode, jpeg.DecodeConfig)
+	} else if inputExt == "png" {
+		image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
+	}
+	// Do different actions for each type of input
 	if inputType == "!valid" {
 		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
 	} else if inputType == "image" {
@@ -108,8 +119,6 @@ func PrintImage(filePath string, windowHeight int) {
 	newWidth := int(float32(originalWidth) / float32(originalHeight) * float32(windowHeight) * 2)
 	// Resize the original image to the terminal's size
 	resizedImg := resize.Resize(uint(newWidth), uint(windowHeight), img, resize.NearestNeighbor)
-
-	screen.Clear()
 	// Loop through every pixel and print the associated char with its luminescence
 	var frame string
 	for y := 0; y < windowHeight; y++ {
@@ -121,6 +130,9 @@ func PrintImage(filePath string, windowHeight int) {
 		}
 		frame += "\n"
 	}
+	cmd := exec.Command("cmd", "/c", "cls")
+	cmd.Stdout = os.Stdout
+	cmd.Run()
 	fmt.Printf("%s", frame)
 }
 
@@ -128,7 +140,7 @@ func PrintImage(filePath string, windowHeight int) {
 
 func FatalIfTrue(e error) {
 	if e != nil {
-		fmt.Printf("Error: %v\n", e)
+		log.Fatal(e)
 	}
 }
 
