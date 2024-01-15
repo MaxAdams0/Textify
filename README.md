@@ -6,6 +6,7 @@ This project is something I come back to every once and a while, originally havi
 - Video conversion/placyback*
 - Terminal Color (option)
 - Linux support
+
 I would like to add more, of course, but I tend to be a little to ambitious with my projects. Even these are a little steep, so I guess we'll have to see how much gets done!
 
 ## Recources
