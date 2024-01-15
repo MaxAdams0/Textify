@@ -3,22 +3,44 @@ package main
 import (
 	"fmt"
 	"image"
-	"image/jpeg"
-	"image/png"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 
-	"github.com/nathan-fiscaletti/consolesize-go"
+	"github.com/inancgumus/screen"
 	"github.com/nfnt/resize"
 )
 
-func FatalIfTrue(e error) {
-	if e != nil {
-		log.Fatal(e)
+func main() {
+	// Get the size (in characters) of the current window
+	_, windowHeight := screen.Size()
+	// Get the input file's path
+	pwd, err := os.Getwd()
+	FatalIfTrue(err)
+	inputPath := pwd + "\\res\\" + GetInputMedia()
+	// Varify that the file is readable (valid), and get its type (image/sequence)
+	inputType := IsValidAndType(GetFileExt(inputPath))
+	if inputType == "!valid" {
+		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
+	} else if inputType == "image" {
+		PrintImage(inputPath, windowHeight)
+	} else if inputType == "sequence" {
+		// Read all elements in the dir
+		files, err := os.ReadDir(inputPath)
+		FatalIfTrue(err)
+		for _, f := range files {
+			framePath := inputPath + "\\" + f.Name()
+			PrintImage(framePath, windowHeight)
+			// Sleep to time FPS (REALLY BIG NOTE, THIS WILL DESYNC BC OF PROCESSING TIME)
+			//sleepDuration := time.Second / time.Duration(fps)
+			//time.Sleep(sleepDuration)
+		}
+	} else {
+		fmt.Printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.")
 	}
 }
+
+// ==================== APPLICATION SPECIFIC FUNCTIONS ============================================================================================================================
 
 func GetInputMedia() string {
 	// Read all elements in the dir "res"
@@ -51,12 +73,15 @@ func IsStringInList(str string, list []string) bool {
 
 func GetFileExt(fileName string) string {
 	fileExtIndex := strings.Index(fileName, ".")
-	return fileName[fileExtIndex:]
+	if fileExtIndex >= 0 {
+		return fileName[fileExtIndex:]
+	} else {
+		return ""
+	}
 }
 
 func IsValidAndType(fileExt string) string {
 	validImageExts := []string{".jpg"}
-	fmt.Printf("File extension: '%s'\n", fileExt)
 	if IsStringInList(fileExt, validImageExts) {
 		return "image"
 	} else if fileExt == "" {
@@ -69,15 +94,6 @@ func IsValidAndType(fileExt string) string {
 func PrintImage(filePath string, windowHeight int) {
 	charmap := " -:;~+?#8$@"
 	// Open the image
-	fileExt := GetFileExt(filePath)
-	if fileExt == "jpg" {
-		image.RegisterFormat("jpeg", "jpg", jpeg.Decode, jpeg.DecodeConfig)
-	} else if fileExt == "png" {
-		image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
-	}
-
-	// loop thru every frame and stuff
-
 	file, err := os.Open(filePath)
 	FatalIfTrue(err)
 	defer file.Close()
@@ -87,27 +103,32 @@ func PrintImage(filePath string, windowHeight int) {
 	// Get the image's size (bounds)
 	bounds := img.Bounds()
 	originalWidth, originalHeight := bounds.Max.X, bounds.Max.Y
-	fmt.Printf("Image size: %d x %d\n", originalWidth, originalHeight)
 	// Get the width, adjusted to the terminal's size
 	// (*2 because 1 char is double high than wide)
 	newWidth := int(float32(originalWidth) / float32(originalHeight) * float32(windowHeight) * 2)
-	fmt.Printf("New terminal size: %d x %d\n", newWidth, windowHeight)
 	// Resize the original image to the terminal's size
 	resizedImg := resize.Resize(uint(newWidth), uint(windowHeight), img, resize.NearestNeighbor)
-	// Clear screen
-	cmd := exec.Command("cmd", "/c", "cls")
-	cmd.Stdout = os.Stdout
-	cmd.Run()
+
+	screen.Clear()
 	// Loop through every pixel and print the associated char with its luminescence
+	var frame string
 	for y := 0; y < windowHeight; y++ {
 		for x := 0; x < newWidth; x++ {
 			r, g, b, _ := resizedImg.At(x, y).RGBA()
 			lum := CalcLuminescence(r, g, b)
 			lum = Normalize(lum, 65535, len(charmap)-1)
-			char := charmap[lum]
-			fmt.Printf("%c", char)
+			frame += string(charmap[lum])
 		}
-		fmt.Printf("\n")
+		frame += "\n"
+	}
+	fmt.Printf("%s", frame)
+}
+
+// ==================== EXTRA UTILITY FUNCTIONS ===================================================================================================================================
+
+func FatalIfTrue(e error) {
+	if e != nil {
+		fmt.Printf("Error: %v\n", e)
 	}
 }
 
@@ -125,38 +146,6 @@ func Clamp(value, min, max int) int {
 }
 
 func Normalize(value, oldMax, newMax int) int {
-	weight := float64(oldMax) / float64(newMax)
-	return int(float64(value) / weight)
-}
-
-func main() {
-	// Get the size (in characters) of the current window
-	windowWidth, windowHeight := consolesize.GetConsoleSize()
-	fmt.Printf("Terminal size: %d x %d\n", windowWidth, windowHeight)
-	// Get the input file's path
-	pwd, err := os.Getwd()
-	FatalIfTrue(err)
-	inputName := GetInputMedia()
-	inputPath := pwd + "\\res\\" + inputName
-	fmt.Printf("Chosen file path: '%s'\n", inputPath)
-	// Varify that the file is readable (valid), and get its type (image/sequence)
-	inputExt := GetFileExt(inputName)
-	inputType := IsValidAndType(inputExt)
-	if inputType == "!valid" {
-		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
-	} else if inputType == "image" {
-		PrintImage(inputPath, windowHeight)
-	} else if inputType == "sequence" {
-		// Read all elements in the dir "res"
-		files, err := os.ReadDir("res")
-		FatalIfTrue(err)
-		// Print every element
-		for i, f := range files {
-			framePath := pwd + "\\res\\" + f.Name()
-			PrintImage(framePath, windowHeight)
-			fmt.Printf("Frame: %d", i)
-		}
-	} else {
-		fmt.Printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.")
-	}
+	weight := float32(oldMax) / float32(newMax)
+	return int(float32(value) / weight)
 }
