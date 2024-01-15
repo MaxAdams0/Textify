@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"image/png"
 	"log"
 	"os"
 	"os/exec"
@@ -48,17 +49,18 @@ func IsStringInList(str string, list []string) bool {
 	return false
 }
 
-func IsValidAndType(fileName string) string {
-	validImageExts := []string{".jpg"}
-	validVideoExts := []string{".mp4"}
-
+func GetFileExt(fileName string) string {
 	fileExtIndex := strings.Index(fileName, ".")
-	fileExt := fileName[fileExtIndex:]
+	return fileName[fileExtIndex:]
+}
+
+func IsValidAndType(fileExt string) string {
+	validImageExts := []string{".jpg"}
 	fmt.Printf("File extension: '%s'\n", fileExt)
 	if IsStringInList(fileExt, validImageExts) {
 		return "image"
-	} else if IsStringInList(fileExt, validVideoExts) {
-		return "video"
+	} else if fileExt == "" {
+		return "sequence"
 	} else {
 		return "!valid"
 	}
@@ -67,7 +69,15 @@ func IsValidAndType(fileName string) string {
 func PrintImage(filePath string, windowHeight int) {
 	charmap := " -:;~+?#8$@"
 	// Open the image
-	image.RegisterFormat("jpeg", "jpg", jpeg.Decode, jpeg.DecodeConfig)
+	fileExt := GetFileExt(filePath)
+	if fileExt == "jpg" {
+		image.RegisterFormat("jpeg", "jpg", jpeg.Decode, jpeg.DecodeConfig)
+	} else if fileExt == "png" {
+		image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
+	}
+
+	// loop thru every frame and stuff
+
 	file, err := os.Open(filePath)
 	FatalIfTrue(err)
 	defer file.Close()
@@ -129,14 +139,23 @@ func main() {
 	inputName := GetInputMedia()
 	inputPath := pwd + "\\res\\" + inputName
 	fmt.Printf("Chosen file path: '%s'\n", inputPath)
-	// Varify that the file is readable (valid), and get its type (image/video)
-	inputType := IsValidAndType(inputName)
+	// Varify that the file is readable (valid), and get its type (image/sequence)
+	inputExt := GetFileExt(inputName)
+	inputType := IsValidAndType(inputExt)
 	if inputType == "!valid" {
 		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
 	} else if inputType == "image" {
 		PrintImage(inputPath, windowHeight)
-	} else if inputType == "video" {
-		fmt.Printf("%s\n", "File is video")
+	} else if inputType == "sequence" {
+		// Read all elements in the dir "res"
+		files, err := os.ReadDir("res")
+		FatalIfTrue(err)
+		// Print every element
+		for i, f := range files {
+			framePath := pwd + "\\res\\" + f.Name()
+			PrintImage(framePath, windowHeight)
+			fmt.Printf("Frame: %d", i)
+		}
 	} else {
 		fmt.Printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.")
 	}
