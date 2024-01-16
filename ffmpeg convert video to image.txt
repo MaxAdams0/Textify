@@ -1,1 +1,1 @@
-ffmpeg -i input.mp4 output_folder/frame_%04d.png
+ffmpeg -i "input.mp4" output_folder/frame_%06d.png

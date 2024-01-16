@@ -7,16 +7,16 @@ import (
 	"image/png"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/inancgumus/screen"
-	"github.com/nfnt/resize"
 )
 
 func main() {
-	// Get the size (in characters) of the current window
-	_, windowHeight := screen.Size()
+	wW, wH := screen.Size()
+	fmt.Printf("Window Size: %d, %d\n", wW, wH)
+
 	// Get the input file's path
 	pwd, err := os.Getwd()
 	FatalIfTrue(err)
@@ -34,14 +34,16 @@ func main() {
 	if inputType == "!valid" {
 		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
 	} else if inputType == "image" {
-		PrintImage(inputPath, windowHeight)
+		PrintImage(inputPath)
 	} else if inputType == "sequence" {
 		// Read all elements in the dir
 		files, err := os.ReadDir(inputPath)
 		FatalIfTrue(err)
 		for _, f := range files {
 			framePath := inputPath + "\\" + f.Name()
-			PrintImage(framePath, windowHeight)
+			frameTime := PrintImage(framePath)
+			fps := int(1 / frameTime)
+			fmt.Printf("File: %s | Frame Time: %f | FPS: %03d", f.Name(), frameTime, fps)
 			// Sleep to time FPS (REALLY BIG NOTE, THIS WILL DESYNC BC OF PROCESSING TIME)
 			//sleepDuration := time.Second / time.Duration(fps)
 			//time.Sleep(sleepDuration)
@@ -102,8 +104,12 @@ func IsValidAndType(fileExt string) string {
 	}
 }
 
-func PrintImage(filePath string, windowHeight int) {
-	charmap := " -:;~+?#8$@"
+func PrintImage(filePath string) float32 {
+	startTime := time.Now().UnixMicro()
+
+	// Get the size (in characters) of the current window
+	_, windowHeight := screen.Size()
+	charmap := " .-=+*#%@" //[]rune{' ', '\u2591', '\u2592', '\u2593'}
 	// Open the image
 	file, err := os.Open(filePath)
 	FatalIfTrue(err)
@@ -117,23 +123,23 @@ func PrintImage(filePath string, windowHeight int) {
 	// Get the width, adjusted to the terminal's size
 	// (*2 because 1 char is double high than wide)
 	newWidth := int(float32(originalWidth) / float32(originalHeight) * float32(windowHeight) * 2)
-	// Resize the original image to the terminal's size
-	resizedImg := resize.Resize(uint(newWidth), uint(windowHeight), img, resize.NearestNeighbor)
+	widthRatio := float32(originalWidth) / float32(newWidth) // image pixels per char "pixel"
+	heightRatio := float32(originalHeight) / float32(windowHeight)
 	// Loop through every pixel and print the associated char with its luminescence
 	var frame string
-	for y := 0; y < windowHeight; y++ {
-		for x := 0; x < newWidth; x++ {
-			r, g, b, _ := resizedImg.At(x, y).RGBA()
-			lum := CalcLuminescence(r, g, b)
+	for y := float32(0.0); y < float32(originalHeight); y += heightRatio {
+		for x := float32(0.0); x < float32(originalWidth); x += widthRatio {
+			r, g, b, _ := img.At(int(x), int(y)).RGBA()
+			lum := CalcLumine(r, g, b)
 			lum = Normalize(lum, 65535, len(charmap)-1)
 			frame += string(charmap[lum])
 		}
 		frame += "\n"
 	}
-	cmd := exec.Command("cmd", "/c", "cls")
-	cmd.Stdout = os.Stdout
-	cmd.Run()
-	fmt.Printf("%s", frame)
+	fmt.Printf("\r%s", frame)
+	endTime := time.Now().UnixMicro()
+	frameTime := float32(endTime-startTime) / float32(1000000) // Elapsed time, Milliseconds -> Seconds
+	return frameTime
 }
 
 // ==================== EXTRA UTILITY FUNCTIONS ===================================================================================================================================
@@ -144,17 +150,8 @@ func FatalIfTrue(e error) {
 	}
 }
 
-func CalcLuminescence(r, g, b uint32) int {
+func CalcLumine(r, g, b uint32) int {
 	return int((r + g + b) / 3)
-}
-
-func Clamp(value, min, max int) int {
-	if value < min {
-		return min
-	} else if value > max {
-		return max
-	}
-	return value
 }
 
 func Normalize(value, oldMax, newMax int) int {
