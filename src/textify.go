@@ -19,7 +19,7 @@ func main() {
 
 	// Get the input file's path
 	pwd, err := os.Getwd()
-	FatalIfTrue(err)
+	ReportError(err)
 	inputPath := pwd + "\\res\\" + GetInputMedia()
 	// Varify that the file is readable (valid), and get its type (image/sequence)
 	inputExt := GetFileExt(inputPath)
@@ -36,17 +36,27 @@ func main() {
 	} else if inputType == "image" {
 		PrintImage(inputPath)
 	} else if inputType == "sequence" {
+		// Get goal FPS/Frametime
+		var fpsGoal int
+		fmt.Print("Set the FPS: ")
+		_, err := fmt.Scan(&fpsGoal)
+		ReportError(err)
+		frameTimeGoal := float32(1) / float32(fpsGoal)
 		// Read all elements in the dir
 		files, err := os.ReadDir(inputPath)
-		FatalIfTrue(err)
+		ReportError(err)
+		// Let the frames begin!
 		for _, f := range files {
 			framePath := inputPath + "\\" + f.Name()
 			frameTime := PrintImage(framePath)
-			fps := int(1 / frameTime)
-			fmt.Printf("File: %s | Frame Time: %f | FPS: %03d", f.Name(), frameTime, fps)
-			// Sleep to time FPS (REALLY BIG NOTE, THIS WILL DESYNC BC OF PROCESSING TIME)
-			//sleepDuration := time.Second / time.Duration(fps)
-			//time.Sleep(sleepDuration)
+			delay := float32(0)
+			sleepDuration := time.Duration(0)
+			if frameTime < frameTimeGoal {
+				delay = frameTimeGoal - frameTime
+				sleepDuration = time.Duration(delay * float32(time.Second))
+				time.Sleep(sleepDuration)
+			}
+			fmt.Printf("File: %s | Frame Time (FT): %f | FT Goal: %f | Delay: %f | FT+D: %f | Sleep: %v", f.Name(), frameTime, frameTimeGoal, delay, (frameTime + delay), sleepDuration)
 		}
 	} else {
 		fmt.Printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.")
@@ -58,15 +68,16 @@ func main() {
 func GetInputMedia() string {
 	// Read all elements in the dir "res"
 	files, err := os.ReadDir("res")
-	FatalIfTrue(err)
+	ReportError(err)
 	// Print every element
 	for i, f := range files {
 		fmt.Printf("%d %s\n", i, f.Name())
 	}
 	// Get file selection from integer input
+	fmt.Print("Choose file (#): ")
 	var chosenFile int
 	_, err = fmt.Scanf("%d", &chosenFile)
-	FatalIfTrue(err)
+	ReportError(err)
 	if chosenFile >= len(files) {
 		log.Fatal("Selected file does not exist. Number provided is likely too large or small.")
 	}
@@ -106,17 +117,16 @@ func IsValidAndType(fileExt string) string {
 
 func PrintImage(filePath string) float32 {
 	startTime := time.Now().UnixMicro()
-
 	// Get the size (in characters) of the current window
 	_, windowHeight := screen.Size()
 	charmap := " .-=+*#%@" //[]rune{' ', '\u2591', '\u2592', '\u2593'}
 	// Open the image
 	file, err := os.Open(filePath)
-	FatalIfTrue(err)
+	ReportError(err)
 	defer file.Close()
 	// Load the image into readable form
 	img, _, err := image.Decode(file)
-	FatalIfTrue(err)
+	ReportError(err)
 	// Get the image's size (bounds)
 	bounds := img.Bounds()
 	originalWidth, originalHeight := bounds.Max.X, bounds.Max.Y
@@ -137,6 +147,7 @@ func PrintImage(filePath string) float32 {
 		frame += "\n"
 	}
 	fmt.Printf("\r%s", frame)
+	// Record frame time (time it takes to process and display a frame)
 	endTime := time.Now().UnixMicro()
 	frameTime := float32(endTime-startTime) / float32(1000000) // Elapsed time, Milliseconds -> Seconds
 	return frameTime
@@ -144,9 +155,9 @@ func PrintImage(filePath string) float32 {
 
 // ==================== EXTRA UTILITY FUNCTIONS ===================================================================================================================================
 
-func FatalIfTrue(e error) {
+func ReportError(e error) {
 	if e != nil {
-		log.Fatal(e)
+		fmt.Printf("Error: %v", e)
 	}
 }
 
