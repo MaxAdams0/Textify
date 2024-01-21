@@ -37,27 +37,27 @@ func main() {
 		PrintImage(inputPath)
 	} else if inputType == "sequence" {
 		// Get goal FPS/Frametime
-		var fpsGoal int
+		var fps int
 		fmt.Print("Set the FPS: ")
-		_, err := fmt.Scan(&fpsGoal)
+		_, err := fmt.Scan(&fps)
 		ReportError(err)
-		frameTimeGoal := float32(1) / float32(fpsGoal)
+		frameTime := float32(1) / float32(fps)
 		// Read all elements in the dir
 		files, err := os.ReadDir(inputPath)
 		ReportError(err)
 		// Let the frames begin!
+		var asciiFrames []string
 		for _, f := range files {
 			framePath := inputPath + "\\" + f.Name()
-			frameTime := PrintImage(framePath)
-			delay := float32(0)
-			sleepDuration := time.Duration(0)
-			if frameTime < frameTimeGoal {
-				delay = frameTimeGoal - frameTime
-				sleepDuration = time.Duration(delay * float32(time.Second))
-				time.Sleep(sleepDuration)
-			}
-			fmt.Printf("File: %s | Frame Time (FT): %f | FT Goal: %f | Delay: %f | FT+D: %f | Sleep: %v", f.Name(), frameTime, frameTimeGoal, delay, (frameTime + delay), sleepDuration)
+			frame := PrintImage(framePath)
+			asciiFrames = append(asciiFrames, frame)
+			fmt.Printf("\rPath: '%s' | FPS: %d | IMAGINE THIS IS A PROGRESS BAR", framePath, fps)
 		}
+		for _, f := range asciiFrames {
+			fmt.Printf("\r%s", f)
+			time.Sleep(time.Duration(frameTime * float32(time.Second)))
+		}
+
 	} else {
 		fmt.Printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.")
 	}
@@ -115,8 +115,7 @@ func IsValidAndType(fileExt string) string {
 	}
 }
 
-func PrintImage(filePath string) float32 {
-	startTime := time.Now().UnixMicro()
+func PrintImage(filePath string) string {
 	// Get the size (in characters) of the current window
 	_, windowHeight := screen.Size()
 	charmap := " .-=+*#%@" //[]rune{' ', '\u2591', '\u2592', '\u2593'}
@@ -146,11 +145,7 @@ func PrintImage(filePath string) float32 {
 		}
 		frame += "\n"
 	}
-	fmt.Printf("\r%s", frame)
-	// Record frame time (time it takes to process and display a frame)
-	endTime := time.Now().UnixMicro()
-	frameTime := float32(endTime-startTime) / float32(1000000) // Elapsed time, Milliseconds -> Seconds
-	return frameTime
+	return frame
 }
 
 // ==================== EXTRA UTILITY FUNCTIONS ===================================================================================================================================
