@@ -34,28 +34,42 @@ func main() {
 	if inputType == "!valid" {
 		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
 	} else if inputType == "image" {
-		PrintImage(inputPath)
+		frame := PrintImage(inputPath)
+		fmt.Printf("\r%s", frame)
 	} else if inputType == "sequence" {
 		// Get goal FPS/Frametime
-		var fps int
+		var fpsGoal int
 		fmt.Print("Set the FPS: ")
-		_, err := fmt.Scan(&fps)
+		_, err := fmt.Scan(&fpsGoal)
 		ReportError(err)
-		frameTime := float32(1) / float32(fps)
+		frameTimeGoal := float32(1) / float32(fpsGoal)
 		// Read all elements in the dir
 		files, err := os.ReadDir(inputPath)
 		ReportError(err)
-		// Let the frames begin!
+		// Let the frame processing begin!
 		var asciiFrames []string
+		var totalProcessingTime int64
 		for _, f := range files {
+			start := time.Now().UnixMilli()
 			framePath := inputPath + "\\" + f.Name()
 			frame := PrintImage(framePath)
 			asciiFrames = append(asciiFrames, frame)
-			fmt.Printf("\rPath: '%s' | FPS: %d | IMAGINE THIS IS A PROGRESS BAR", framePath, fps)
+			end := time.Now().UnixMilli()
+			totalProcessingTime += end - start
+			// add progress bar at some point
+			fmt.Printf("\rPath: '%s' | Elapsed Time (sec): %d", framePath, totalProcessingTime/1000)
 		}
+		// Print each frame with a delay to sustain FPS goal
+		// Warning: still can be perminantly behind when (frame time > 1/fps)
+		// Warning2: this does not account for the amount of time it takes to actually print the "image"
 		for _, f := range asciiFrames {
+			start := time.Now().UnixMilli()
 			fmt.Printf("\r%s", f)
-			time.Sleep(time.Duration(frameTime * float32(time.Second)))
+			end := time.Now().UnixMilli()
+			// The frame time goal in seconds minus the frame print time in seconds
+			// Warning3: im honestly not entirely sure this works yet
+			delay := ((frameTimeGoal) * float32(time.Second)) - float32(end-start)/float32(time.Second)
+			time.Sleep(time.Duration(delay))
 		}
 
 	} else {
