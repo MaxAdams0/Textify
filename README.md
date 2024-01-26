@@ -1,9 +1,20 @@
 # Textify
-Hi! This is just a personal project to convert visual media into ASCII art, written in both C and Go! <br>
-This project is something I come back to every once and a while, originally having written it in C++, but deciding that it is not the right language for me. Also, my old rusty code needed to be revitalized with new knowledge, so I decided to start over completely in C! Then I got tired of C's required boilerplate for basic features, and pulled a full 180 and re-wrote it all in Go!
+Hi! This is just a personal project to convert visual media into ASCII art, written in both C, C++, and Go! <br>
+I have revisited this project many times, switching languages very often when one language's downfall annoys me. C's obscurity and complexity. C++'s horrible error messages. Go's lack of (simple to implement) GUI frameworks and lesser performance. But, it's good practice for me!
+
+## Current Features (by language)
+### Go
+- Image conversion
+- Sequence conversion & playback
+### C
+- Image conversion
+- broken lol
+### C++
+- Image conversion
+- Sequence conversion & playback
+- also broken lol
 
 ## Future Update Goals:
-- Video conversion/placyback*
 - Terminal Color (option)
 - Linux support
 
