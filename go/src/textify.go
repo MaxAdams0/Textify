@@ -34,7 +34,7 @@ func main() {
 	if inputType == "!valid" {
 		fmt.Printf("%s\n", "The provided input type/extension is not supported, sorry!")
 	} else if inputType == "image" {
-		frame := PrintImage(inputPath)
+		frame := GetImage(inputPath)
 		fmt.Printf("\r%s", frame)
 	} else if inputType == "sequence" {
 		// Get goal FPS/Frametime
@@ -52,7 +52,7 @@ func main() {
 		for _, f := range files {
 			start := time.Now().UnixMilli()
 			framePath := inputPath + "\\" + f.Name()
-			frame := PrintImage(framePath)
+			frame := GetImage(framePath)
 			asciiFrames = append(asciiFrames, frame)
 			end := time.Now().UnixMilli()
 			totalProcessingTime += end - start
@@ -75,6 +75,9 @@ func main() {
 	} else {
 		fmt.Printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.")
 	}
+
+	fmt.Printf("%s", "Closing in 10 seconds...")
+	time.Sleep(time.Duration(10 * time.Second))
 }
 
 // ==================== APPLICATION SPECIFIC FUNCTIONS ============================================================================================================================
@@ -129,7 +132,8 @@ func IsValidAndType(fileExt string) string {
 	}
 }
 
-func PrintImage(filePath string) string {
+// TODO: OPTIMIZE THE SH*T OUT OF THIS
+func GetImage(filePath string) string {
 	// Get the size (in characters) of the current window
 	_, windowHeight := screen.Size()
 	charmap := " .-=+*#%@" //[]rune{' ', '\u2591', '\u2592', '\u2593'}
