@@ -1,6 +1,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
 
+// This is temporary removals of flags for building
+// Delete this after all bugs are squashed. Next step is performance!
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wfloat-conversion"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -34,7 +40,9 @@ std::string GetFileExt(std::string fileName);
 int IsValidAndType(std::string fileExt);
 /* Get the ascii-converted image from a file's path */
 std::string GetImage(std::string filePath);
+/* Calculate the luminescence (brightness) of a pixel */
 int CalcLumine(int r, int g, int b);
+/* Turn a value from an original range (0 onward) to a new range (0 onward) */
 int Normalize(int val, int oldmax, int newmax);
 
 int main()
@@ -67,7 +75,7 @@ int main()
 		int fpsGoal;
 		std::cout << "Set fps goal: ";
 		std::cin >> fpsGoal;
-		float frameTimeGoal = 1 / fpsGoal;
+		float frameTimeGoal = 1.0f / float(fpsGoal);
 		// Read all elements in the dir
 		std::vector<std::string> files = {};
 		for (const auto & entry : fs::directory_iterator(filePath))
@@ -210,7 +218,7 @@ std::string GetImage(std::string filePath)
 			int b = image[pixelOffset + 2];
 			int lum = CalcLumine(r, g, b);
 			lum = Normalize(lum, 255, charmap.size());
-			frame += charmap.at(lum);
+			frame += charmap[lum];
 		}
 		frame += "\n";
 	}

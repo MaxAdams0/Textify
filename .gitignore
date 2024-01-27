@@ -1,2 +1,4 @@
-/.vscode
-/res
+/.vscode/*
+/res/*
+/src/res/*
+/src/build/*
