@@ -12,15 +12,13 @@ namespace fs = std::filesystem;
 namespace sc = std::chrono;
 #include <vector>
 #include <thread>
+#include <iostream>
 #include <tuple>
-
 
 #include "../lib/STB/stb_image.h"
 #include "../lib/STB/stb_image_resize2.h"
 
 #define OUTPUT_CHANNELS 3
-
-const std::string charmap = " .-=+*#%@";
 
 /* Get the Terminal window size in characters */
 std::tuple<int, int> GetWindowSize();
@@ -46,27 +44,29 @@ int main()
 			perror("Error creating directory");
 
 	MaximizeWindow();
+	auto [winWidth, winHeight] = GetWindowSize();
+	std::cout << "Window Size: " << winWidth << " x " << winHeight << "\n";
 
 	// Get which file to use for the image
 	std::string fileName = GetInputFile();
 	std::string filePath = fs::current_path().string() + "\\res\\" + fileName;
-	printf("Chosen file path: '%s'\n", filePath.c_str());
+	std::cout << "Chosen file path: '" << filePath.c_str() << "'\n";
 
 	// Varify that the file is readable (valid), and get its type (image/sequence)
 	std::string fileExt = GetFileExt(filePath);
 	int fileType = IsValidAndType(fileExt);
 	// Do different actions for each type of input
 	if (fileType == -1) {
-		printf("%s\n", "The provided input type/extension is not supported, sorry!");
+		std::cout << "The provided input type/extension is not supported, sorry!\n";
 	} 
 	else if (fileType == 0) {
-		printf("\r%s", GetImage(filePath));
+		std::cout << "\r" << GetImage(filePath);
 	}
 	else if (fileType == 1) {
 		// Get goal FPS/Frametime
 		int fpsGoal;
-		printf("%s", "Set fps goal: ");
-		scanf("%d", &fpsGoal);
+		std::cout << "Set fps goal: ";
+		std::cin >> fpsGoal;
 		float frameTimeGoal = 1 / fpsGoal;
 		// Read all elements in the dir
 		std::vector<std::string> files = {};
@@ -82,14 +82,14 @@ int main()
 			std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 			totalProcessingTime += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 			// add progress bar at some point
-			printf("\rPath: '%s' | Elapsed Time (sec): %d", framePath, totalProcessingTime / 1000);
+			std::cout << "\rPath: '" << framePath << "' | Elapsed Time (sec): " << totalProcessingTime / 1000;
 		}
 		// Print each frame with a delay to sustain FPS goal
 		// Warning: still can be perminantly behind when (frame time > 1/fps)
 		// Warning2: this does not account for the amount of time it takes to actually print the "image"
 		for (auto & frame : asciiFrames) {
 			std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-			printf("\r%s", frame.c_str());
+			std::cout << "\r" << frame;
 			std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 			// The frame time goal in seconds minus the frame print time in seconds
 			// Warning3: im honestly not entirely sure this works yet
@@ -98,11 +98,11 @@ int main()
 		}
 
 	} else {
-		printf("%s\n", "IsValidAndType gave erroneous response. Issue Unknown.");
+		std::cout << "IsValidAndType gave erroneous response. Issue Unknown.\n";
 	}
 
-	printf("%s", "Closing in 10 seconds...");
-	Sleep(100000);
+	std::cout << "Closing in 10 seconds...";
+	Sleep(10000);
 }
 
 std::tuple<int, int> GetWindowSize()
@@ -133,13 +133,13 @@ std::string GetInputFile()
 	// display every file in the directory
 	unsigned int i = 0;
 	for (auto & filepath : files)
-		printf("%d %s\n", i++, filepath.c_str());
+		std::cout << i++ << " " << filepath << "\n";
 
 
 	// select one of the displayed files
 	int selection;
-	printf("What file do you choose?: ");
-	scanf("%d", &selection);
+	std::cout << "What file do you choose?: ";
+	std::cin >> selection;
 
 	std::string chosenFile = files.at(selection);
 
@@ -183,23 +183,33 @@ std::string GetImage(std::string filePath)
 	// Load the image file
 	int imgWidth, imgHeight, channels;
 	unsigned char *image = stbi_load(filePath.c_str(), &imgWidth, &imgHeight, &channels, OUTPUT_CHANNELS);
-	if (image == nullptr)
+	if (image == nullptr) {
 		perror("Error loading image.");
+		return "";
+	}
 
-	int newWidth = imgWidth / (imgHeight * winWidth * 2);
-	float widthRatio = imgWidth / newWidth;
-	float heightRatio = imgHeight / winHeight;
+	//int newWidth = (float(imgWidth) / float(imgHeight)) * winWidth * 2;
+	//std::cout << "Image Resize Dimesions: " << winWidth << " x " << imgHeight << "\n";
+
+	const float widthRatio = float(imgWidth) / float(winWidth);
+	const float heightRatio = float(imgHeight) / float(winHeight);
+
+	std::cout << "Width Ratio: " << widthRatio << "\n";
+	std::cout << "Height Ratio: " << heightRatio << "\n";
+
+	const std::string charmap = " .-=+*#%@";
 
 	std::string frame;
-	for (float y = 0.0f; y < imgHeight; y += heightRatio) {
-		for (float x = 0.0f; x < imgWidth; x += widthRatio) {
-			int pixelOffset = (int(y) + newWidth * int(x)) * channels;
-			int red = image[pixelOffset + 0];
-			int green = image[pixelOffset + 1];
-			int blue = image[pixelOffset + 2];
-			//int a = channels >= 4 ? image[pixelOffset + 3] : 0xff;
-			int lum = CalcLumine(red, green, blue);
-			lum = Normalize(lum, USHRT_MAX, charmap.size());
+	for (int y = 0; y < winHeight; ++y) {
+		for (int x = 0; x < winWidth; ++x) {
+			int imgX = x * widthRatio;
+			int imgY = y * heightRatio;
+			int pixelOffset = (imgY * imgWidth + imgX) * channels;
+			int r = image[pixelOffset + 0];
+			int g = image[pixelOffset + 1];
+			int b = image[pixelOffset + 2];
+			int lum = CalcLumine(r, g, b);
+			lum = Normalize(lum, 255, charmap.size());
 			frame += charmap.at(lum);
 		}
 		frame += "\n";
@@ -210,9 +220,9 @@ std::string GetImage(std::string filePath)
 }
 
 int CalcLumine(int r, int g, int b){
-	return int(0.299 * r + 0.587 * g + 0.114 * b);
+	return int((r + g + b) / 3.0);
 }
 
-int Normalize(int val, int oldmax, int newmax) {
-	return (val) * (newmax) / (oldmax);
-} 
+int Normalize(int value, int oldmax, int newmax) {
+	return int(float(value) / float(oldmax) * newmax);
+}
