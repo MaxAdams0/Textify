@@ -1,3 +1,3 @@
-go build -o TextifyGo.exe ./src/go/textify.go
+go build -o TextifyGo.exe ./src/textify.go
 pause
 start TextifyGo.exe
