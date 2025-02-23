@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <windows.h>
 #include <time.h>
 
@@ -10,52 +11,75 @@ struct iXY {
 	int x;
 	int y;
 };
+// Array sizes
+#define MAX_CMD_RETURN 2048
 
-#define CHARMAP " .,~-+<oiOIPBA#@"
-// " `.-':_,^=;><+!rc*/z?sLTv)J7(|Fi{C}fI31tlu[neoZ5Yxjya]2ESwqkP6h9d4VpOGbUAKXHm8RD#$Bg0MNWQ%&@"
+// Commands (all are missing -i/-o)
+#define FFPROBE_FPS_CMD "ffprobe -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate" // path at end (no -i)
+#define FFPROBE_DUR_CMD "ffprobe -v error -of csv=p=0 -show_entries format=duration" // path at end (no -i)
+// ffmpeg -i "./res/aot_37.mkv" -vf "scale=237:64,format=gray" -pix_fmt gray -vsync 0 -y "./res/frames/frame_%07d.bmp"
+#define FFMPEG_GEN_FRAMES "ffmpeg -vf scale=237:64,format=gray -pix_fmt gray -vsync 0 -y" // requries -i & -o
+
+// Image conversion 
+#define CHARMAP " .,~-+<oiOIPBA#@" // " `.-':_,^=;><+!rc*/z?sLTv)J7(|Fi{C}fI31tlu[neoZ5Yxjya]2ESwqkP6h9d4VpOGbUAKXHm8RD#$Bg0MNWQ%&@"
 #define CALC_LUMINESCENCE(r,g,b) (int)(0.299 * r + 0.587 * g + 0.114 * b);
 
-int Norm(int v, int omax, int nmax);
+// Win32
+void MaximizeConsoleWindow();
+void GetConsoleSize(int *rows, int *cols);
 void ClearScreen();
 void HideCursor();
 int GetDirFileCount(const char *directory);
-char* PathConcat(const char* p1, const char* p2);
 char** ListDir(const char *dir, int *fileCount);
 void FreeFilePaths(char **filePaths, int fileCount);
 
-int main() {
-	HANDLE hStdout;
-	hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+// Math
+int Norm(int v, int omax, int nmax);
 
-	struct iXY winSize; // predefined -- TODO win32 =(
-	winSize.x = 237;
-	winSize.y = 64;
+// Other
+char* PathConcat(const char* p1, const char* p2);
+void RunCommand(char* output, const char *command, const int lineSize);
+
+int main() {
+	// Setup / get console size
+	MaximizeConsoleWindow();
+	struct iXY winSize;
+	GetConsoleSize(&winSize.x, &winSize.y);
 	printf("Window Size: %d x %d\n", winSize.x, winSize.y);
 	
+	// Get paths
 	char homeDir[MAX_PATH] = "E:\\dev\\Textify";
+	char frameDir[MAX_PATH];
+	strcpy(frameDir, PathConcat(homeDir, "\\res\\blladeyblijnkey"));
 	
-	char framePath[MAX_PATH];
-	strcpy(framePath, PathConcat(homeDir, "\\res\\blladeyblijnkey"));
+	// Get file related data
+	char ffprobeFps[MAX_CMD_RETURN];
 	
+	//RunCommand(&ffprobeFps, ) TODO
 	float fps = 24;
 	float frameTime = (1.0 / fps) * 1000.0;
-	int frameCount = GetDirFileCount(framePath);
-	float dur = (float)(frameCount) / fps;
-	printf("FPS: %05f, FT: %05f, Frames: %d, Dur: %05f\n", 
-		fps, frameTime, frameCount, dur);
+	int frameCount = GetDirFileCount(frameDir);
+	if (frameCount <= 0) {
+		printf("Could not find any files in directory '%s'", frameDir);
+		return -1;
+	}
 	
-	char **filePaths = ListDir(framePath, &frameCount);
+	float duration = (float)(frameCount) / fps;
+	printf("FPS: %05f, FT: %05fms, Frames: %d, Duration: %05fs\n", fps, frameTime, frameCount, duration);
+	
+	char **filePaths = ListDir(frameDir, &frameCount);
 	if (filePaths == NULL) {
 		return -1;
 	}
 	
-	Sleep(2000);
+	puts("Video will begin in 3 seconds...");
+	Sleep(3000);
 	ClearScreen();
-	HideCursor(); // idk jik
+	HideCursor();
 	
 	clock_t start, end;
 	double cpuTimeLapsed;
-	double waitTime = 0;
+	double waitTime = 0; // so output matches same fps as video
 	for (int i = 0; i < frameCount; i++) {
 		start = clock();
 		
@@ -88,12 +112,11 @@ int main() {
 		fflush(stdout);
 		
 		end = clock();
-		cpuTimeLapsed = ((double)(end - start)) / CLOCKS_PER_SEC;
-		waitTime = frameTime - cpuTimeLapsed;
+		cpuTimeLapsed = ((double)(end - start)) / CLOCKS_PER_SEC; // ms / milliseconds
+		waitTime = (frameTime - cpuTimeLapsed) * 1000.0; // microseconds
 		
 		stbi_image_free(img);
-		Sleep(waitTime);
-		//printf("ft: %05f, cpu: %05f, wait: %d\n", frameTime, cpuTimeLapsed, waitTime);
+		usleep(waitTime);
 	}
 
 
@@ -102,26 +125,41 @@ int main() {
 	return 0;
 }
 
-// ffmpeg -i "./res/aot_37.mkv" -vf "scale=237:64,format=gray" -pix_fmt gray -vsync 0 -y "./res/frames/frame_%07d.bmp"
+// Win32
 
-int Norm(int v, int omax, int nmax) {
-	int weight = omax / nmax;
-	return v / weight;
+void MaximizeConsoleWindow() {
+	HWND hwnd = GetConsoleWindow();
+	if (hwnd) {
+		ShowWindow(hwnd, SW_MAXIMIZE);
+	} else {
+		puts("Unable to maximize window (could not get hwnd)");
+	}
 }
 
+void GetConsoleSize(int *rows, int *cols) {
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi)) {
+		*cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+		*rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	} else { // failure case 
+		*cols = 0;
+		*rows = 0;
+	}
+}
+
+// ***Gives the console a behavior of 'overwriting' the screen instead of 'line-by-line' writing
 void ClearScreen() {
-	// Get the console handle
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	// Get the current console screen buffer info
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	GetConsoleScreenBufferInfo(hConsole, &csbi);
 
-	// Set the cursor to the top-left corner
+	// set cursor to top left
 	COORD coord = {0, 0};
 	SetConsoleCursorPosition(hConsole, coord);
 }
 
+// Prevent cursor flashing blocking image
 void HideCursor() {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_CURSOR_INFO cursorInfo;
@@ -130,34 +168,28 @@ void HideCursor() {
     SetConsoleCursorInfo(hConsole, &cursorInfo);
 }
 
-int GetDirFileCount(const char *directory) {
-	WIN32_FIND_DATA fData;
-	HANDLE fHandle;
-	int fCount = 0;
+int GetDirFileCount(const char *dir) {
+	WIN32_FIND_DATA data;
+	HANDLE handle;
+	int count = 0;
 
 	char searchPath[MAX_PATH];
-	snprintf(searchPath, sizeof(searchPath), "%s\\*", directory);
+	snprintf(searchPath, sizeof(searchPath), "%s\\*", dir);
 
-	fHandle = FindFirstFile(searchPath, &fData);
-	if (fHandle == INVALID_HANDLE_VALUE) {
-		printf("Error opening directory: %s\n", directory);
+	handle = FindFirstFile(searchPath, &data);
+	if (handle == INVALID_HANDLE_VALUE) {
+		printf("Error opening directory: %s\n", dir);
 		return -1;
 	}
 
 	do {
-		if (!(fData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-			fCount++;
+		if (!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			count++;
 		}
-	} while (FindNextFile(fHandle, &fData) != 0);
+	} while (FindNextFile(handle, &data) != 0);
 
-	FindClose(fHandle);
-	return fCount;
-}
-
-char* PathConcat(const char* p1, const char* p2) {
-	static char buffer[MAX_PATH];
-	snprintf(buffer, sizeof(buffer), "%s%s", p1, p2);
-	return buffer;
+	FindClose(handle);
+	return count;
 }
 
 char** ListDir(const char *dir, int *fileCount) {
@@ -221,4 +253,37 @@ void FreeFilePaths(char **filePaths, int fileCount) {
 		free(filePaths[i]);
 	}
 	free(filePaths);
+}
+
+// Math
+
+int Norm(int v, int omax, int nmax) {
+	int weight = omax / nmax;
+	return v / weight;
+}
+
+// Other
+
+char* PathConcat(const char* p1, const char* p2) {
+	static char buffer[MAX_PATH];
+	snprintf(buffer, sizeof(buffer), "%s%s", p1, p2);
+	return buffer;
+}
+
+void RunCommand(char* output, const char *command, const int lineSize) {
+	FILE *fp;
+	char buffer[lineSize];
+
+	fp = popen(command, "r"); // treating console as file
+	if (fp == NULL) {
+		perror("popen failed");
+		return;
+	}
+
+	// read output line-by-line
+	while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+		strcat(output, buffer);
+	}
+
+	pclose(fp);
 }

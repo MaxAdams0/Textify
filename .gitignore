@@ -1,4 +1,3 @@
 /.vscode/*
 /res/*
-/src/res/*
-/src/build/*
+/icon/*.cpp
