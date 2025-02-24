@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+
 #include <unistd.h>
 #include <windows.h>
 #include <time.h>
@@ -12,13 +14,14 @@ struct iXY {
 	int y;
 };
 // Array sizes
-#define MAX_CMD_RETURN 2048
+#define MAX_CMD_SIZE 512
+#define MAX_CMD_RETURN 16
 
 // Commands (all are missing -i/-o)
-#define FFPROBE_FPS_CMD "ffprobe -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate" // path at end (no -i)
-#define FFPROBE_DUR_CMD "ffprobe -v error -of csv=p=0 -show_entries format=duration" // path at end (no -i)
+#define FFPROBE_FPS_CMD "" // path at end (no -i)
+#define FFPROBE_DUR_CMD "" // path at end (no -i)
 // ffmpeg -i "./res/aot_37.mkv" -vf "scale=237:64,format=gray" -pix_fmt gray -vsync 0 -y "./res/frames/frame_%07d.bmp"
-#define FFMPEG_GEN_FRAMES "ffmpeg -vf scale=237:64,format=gray -pix_fmt gray -vsync 0 -y" // requries -i & -o
+#define FFMPEG_GEN_FRAMES "" // requries -i & -o
 
 // Image conversion 
 #define CHARMAP " .,~-+<oiOIPBA#@" // " `.-':_,^=;><+!rc*/z?sLTv)J7(|Fi{C}fI31tlu[neoZ5Yxjya]2ESwqkP6h9d4VpOGbUAKXHm8RD#$Bg0MNWQ%&@"
@@ -39,8 +42,16 @@ int Norm(int v, int omax, int nmax);
 // Other
 char* PathConcat(const char* p1, const char* p2);
 void RunCommand(char* output, const char *command, const int lineSize);
+void FillCommands(char* fpsCmd, char* durCmd, char* genCmd);
 
-int main() {
+
+bool ARG_DEBUG = false;
+
+int main(int argc, char *argv[]) {
+	for (int i=0; i < argc; i++) {
+		if (strcmp(argv[i], "-debug") == 0) ARG_DEBUG = true;
+	}
+	
 	// Setup / get console size
 	MaximizeConsoleWindow();
 	struct iXY winSize;
@@ -48,24 +59,54 @@ int main() {
 	printf("Window Size: %d x %d\n", winSize.x, winSize.y);
 	
 	// Get paths
-	char homeDir[MAX_PATH] = "E:\\dev\\Textify";
-	char frameDir[MAX_PATH];
-	strcpy(frameDir, PathConcat(homeDir, "\\res\\blladeyblijnkey"));
+	char homeDir[MAX_PATH], frameDir[MAX_PATH], videoPath[MAX_PATH];
+	getcwd(homeDir, sizeof(homeDir));
+	snprintf(frameDir, sizeof(frameDir), "%s\\temp_frames", homeDir);
+	printf("Input video file path: ");  
+	scanf("%s", videoPath);
 	
-	// Get file related data
-	char ffprobeFps[MAX_CMD_RETURN];
+	// Fill commands
+	char fpsCmd[MAX_CMD_SIZE], durCmd[MAX_CMD_SIZE], genCmd[MAX_CMD_SIZE];
+	snprintf(fpsCmd, sizeof(fpsCmd), "ffprobe -v quiet -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate \"%s\"", videoPath);
+	snprintf(durCmd, sizeof(durCmd), "ffprobe -v quiet -of csv=p=0 -show_entries format=duration \"%s\"", videoPath);
+	snprintf(genCmd, sizeof(genCmd), "ffmpeg -v quiet -i \"%s\" -vf scale=237:64,format=gray -pix_fmt gray -vsync 0 -y \"%s\\frame_%%07d.bmp\"", videoPath, frameDir);
 	
-	//RunCommand(&ffprobeFps, ) TODO
-	float fps = 24;
-	float frameTime = (1.0 / fps) * 1000.0;
+	// Run commands
+	char fpsRes[MAX_CMD_RETURN], durRes[MAX_CMD_RETURN], genRes[MAX_CMD_RETURN];
+	puts("Retrieving video fps...");
+	if (ARG_DEBUG) puts(fpsCmd); // DEBUG
+	RunCommand(fpsRes, fpsCmd, winSize.x);
+	if (ARG_DEBUG) puts(fpsRes); // DEBUG
+	
+	puts("Retrieving video duration...");
+	if (ARG_DEBUG) puts(durCmd); // DEBUG
+	RunCommand(durRes, durCmd, winSize.x);
+	if (ARG_DEBUG) puts(durRes); // DEBUG
+	
+	puts("Converting video into frames...");
+	if (ARG_DEBUG) puts(genCmd); // DEBUG
+	RunCommand(genRes, genCmd, winSize.x);
+	if (ARG_DEBUG) puts(genRes); // DEBUG
+	
+	// Process command outputs
+	float v_fps, v_dur;
+	
+	float num, denom;
+	if (sscanf(fpsRes, "%f/%f", &num, &denom) != 2) {
+		puts("Error processing fps ouput.");
+		return EXIT_FAILURE;
+	}
+	v_fps = num / denom;
+	v_dur = atof(durRes);
+	
+	float frameTime = (1.0 / v_fps) * 1000.0; // s -> ms
 	int frameCount = GetDirFileCount(frameDir);
 	if (frameCount <= 0) {
 		printf("Could not find any files in directory '%s'", frameDir);
 		return -1;
 	}
 	
-	float duration = (float)(frameCount) / fps;
-	printf("FPS: %05f, FT: %05fms, Frames: %d, Duration: %05fs\n", fps, frameTime, frameCount, duration);
+	printf("FPS: %05f, FT: %05fms, Frames: %d, Duration: %05fs\n", v_fps, frameTime, frameCount, v_dur);
 	
 	char **filePaths = ListDir(frameDir, &frameCount);
 	if (filePaths == NULL) {
@@ -161,11 +202,11 @@ void ClearScreen() {
 
 // Prevent cursor flashing blocking image
 void HideCursor() {
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_CURSOR_INFO cursorInfo;
-    GetConsoleCursorInfo(hConsole, &cursorInfo);
-    cursorInfo.bVisible = FALSE;  // Hide the cursor
-    SetConsoleCursorInfo(hConsole, &cursorInfo);
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_CURSOR_INFO cursorInfo;
+	GetConsoleCursorInfo(hConsole, &cursorInfo);
+	cursorInfo.bVisible = FALSE;  // Hide the cursor
+	SetConsoleCursorInfo(hConsole, &cursorInfo);
 }
 
 int GetDirFileCount(const char *dir) {
@@ -287,3 +328,4 @@ void RunCommand(char* output, const char *command, const int lineSize) {
 
 	pclose(fp);
 }
+
