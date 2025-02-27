@@ -2,3 +2,5 @@
 /res/*
 /icon/*.cpp
 /temp_frames/*
+
+*.cpp linguist-vendored
